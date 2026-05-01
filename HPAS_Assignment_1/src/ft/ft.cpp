@@ -50,7 +50,37 @@ NDArray<double> idft_1d(NDArray<std::complex<double>> in) {
 NDArray<std::complex<double>> cooley_tukey_fft_1d(NDArray<double> in) {
     NDArray<std::complex<double>> out = NDArray<std::complex<double>>::empty({in.shape[0]});
 
-    // Your code here
+    const auto N = out.shape[0];
+
+    if (N == 1) { // FFT of a single point is itself
+        out(0) = in(0);
+        return out;
+    } 
+    NDArray<double> even = NDArray<double>::empty({N/2});
+    NDArray<double> odd = NDArray<double>::empty({N/2});
+
+    // split into odd and even    
+    for (int i = 0; i < N; i++) {
+        if (i % 2 == 0) { 
+            even(i/2) = in(i);
+        } else {
+            odd(i/2)= in(i);
+        }
+    }
+
+    // recursive calls
+    auto E = cooley_tukey_fft_1d(even);
+    auto O = cooley_tukey_fft_1d(odd);
+
+
+    for (int k = 0; k < N/2; k++) { //combination loop
+        std::complex<double> twiddle = exp(-I * (2.0 * M_PI * k / N));
+        std::complex<double> t = twiddle * O(k);
+        out(k) = E(k) + t;
+        out(k + N/2) = E(k) - t;
+
+    }
+
 
     return out;
 }
@@ -84,7 +114,37 @@ NDArray<std::complex<double>> cooley_tukey_fft_1d(NDArray<std::complex<double>> 
 NDArray<std::complex<double>> cooley_tukey_ifft_1d(NDArray<std::complex<double>> in) {
     NDArray<std::complex<double>> out = NDArray<std::complex<double>>::empty({in.shape[0]});
 
-    // Your code here
+    const auto N = out.shape[0];
+
+    if (N == 1) { // FFT of a single point is itself
+        out(0) = in(0);
+        return out;
+    } 
+    NDArray<std::complex<double>> even = NDArray<std::complex<double>>::empty({N/2});
+    NDArray<std::complex<double>> odd = NDArray<std::complex<double>>::empty({N/2});
+
+    // split into odd and even    
+    for (int i = 0; i < N; i++) {
+        if (i % 2 == 0) { 
+            even(i/2) = in(i);
+        } else {
+            odd(i/2)= in(i);
+        }
+    }
+
+    // recursive calls
+    auto E = cooley_tukey_fft_1d(even);
+    auto O = cooley_tukey_fft_1d(odd);
+
+
+    for (int k = 0; k < N/2; k++) { //combination loop
+        std::complex<double> twiddle = exp(-I * (2.0 * M_PI * k / N));
+        std::complex<double> t = twiddle * O(k);
+        out(k) = E(k) + t;
+        out(k + N/2) = E(k) - t;
+
+    }
+
 
     return out;
 }
