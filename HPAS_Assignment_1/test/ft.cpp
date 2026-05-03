@@ -101,3 +101,38 @@ TEST_CASE("2D DFT Idempotence, square", "[dft-2d]") {
     REQUIRE(idftTestOut.approxEquals(in));
 
 }
+
+TEST_CASE("Recursive FFT (real) matches DFT", "[fft-1d]") {
+    auto size = GENERATE(1, 2, 4, 8, 256, 1024);
+
+    auto data = generate_random_vector(size);
+
+    NDArray<double> fromData(data);
+
+    auto dft_out = dft_1d(fromData);
+    auto fft_out = cooley_tukey_fft_1d(fromData);
+
+    REQUIRE(dft_out.shape[0] == fft_out.shape[0]);
+    REQUIRE(dft_out.approxEquals(fft_out));
+
+}
+
+TEST_CASE("Recursive FFT (complex) matches DFT", "[fft-1d]") {
+    auto size = GENERATE(1, 2, 4, 8, 256, 1024);
+
+    auto data = generate_random_vector(size);
+
+    NDArray<double> fromData(data);
+
+    NDArray<std::complex<double>> complex_in = NDArray<std::complex<double>>::empty({size});
+    for (size_t i = 0; i < size; i++) {
+        complex_in(i) = fromData(i);
+    }
+
+    auto dft_out = dft_1d(fromData);
+    auto fft_out = cooley_tukey_fft_1d(complex_in);
+
+    REQUIRE(dft_out.shape[0] == fft_out.shape[0]);
+    REQUIRE(dft_out.approxEquals(fft_out));
+
+}

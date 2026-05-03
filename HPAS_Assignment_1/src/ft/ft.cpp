@@ -96,22 +96,6 @@ NDArray<std::complex<double>> cooley_tukey_fft_1d(NDArray<double> in) {
 **/
 NDArray<std::complex<double>> cooley_tukey_fft_1d(NDArray<std::complex<double>> in)
 {
-    int N = in.shape[0];
-    NDArray<std::complex<double>> out = NDArray<std::complex<double>>::empty({ N });
-
-    // Your code here
-
-    return out;
-}
-
-
-/**
- ====== TODO: IMPLEMENT ======
- * Compute the Inverse Fast Fourier Transform (IFFT) of a 1D array using the recursive method.
- * @param in: the input array to perform the IFFT on.
- * @return the inverse transformed array without normalization
-**/
-NDArray<std::complex<double>> cooley_tukey_ifft_1d(NDArray<std::complex<double>> in) {
     NDArray<std::complex<double>> out = NDArray<std::complex<double>>::empty({in.shape[0]});
 
     const auto N = out.shape[0];
@@ -149,6 +133,50 @@ NDArray<std::complex<double>> cooley_tukey_ifft_1d(NDArray<std::complex<double>>
     return out;
 }
 
+
+/**
+ ====== TODO: IMPLEMENT ======
+ * Compute the Inverse Fast Fourier Transform (IFFT) of a 1D array using the recursive method.
+ * @param in: the input array to perform the IFFT on.
+ * @return the inverse transformed array without normalization
+**/
+NDArray<std::complex<double>> cooley_tukey_ifft_1d(NDArray<std::complex<double>> in) {
+    NDArray<std::complex<double>> out = NDArray<std::complex<double>>::empty({in.shape[0]});
+
+    const auto N = out.shape[0];
+
+    if (N == 1) { // FFT of a single point is itself
+        out(0) = in(0);
+        return out;
+    } 
+    NDArray<std::complex<double>> even = NDArray<std::complex<double>>::empty({N/2});
+    NDArray<std::complex<double>> odd = NDArray<std::complex<double>>::empty({N/2});
+
+    // split into odd and even    
+    for (int i = 0; i < N; i++) {
+        if (i % 2 == 0) { 
+            even(i/2) = in(i);
+        } else {
+            odd(i/2)= in(i);
+        }
+    }
+
+    // recursive calls
+    auto E = cooley_tukey_ifft_1d(even);
+    auto O = cooley_tukey_ifft_1d(odd);
+
+
+    for (int k = 0; k < N/2; k++) { //combination loop
+        std::complex<double> twiddle = exp(I * (2.0 * M_PI * k / N));
+        std::complex<double> t = twiddle * O(k);
+        out(k) = E(k) + t;
+        out(k + N/2) = E(k) - t;
+
+    }
+
+    return out;
+}
+
 unsigned int bitReverse(unsigned int x, int log2n)
 {
     int n = 0;
@@ -178,7 +206,23 @@ NDArray<std::complex<double>> iterative_fft_1d(NDArray<double> in)
 
     NDArray<std::complex<double>> out = NDArray<std::complex<double>>::empty({ in.shape[0] });
 
-    // Your code here
+    for (int i = 0; i < n; i++) {
+        out(bitReverse(i, log2n))= in(i);
+    }
+
+    for (int size = 2; size <= n; size *=2) {
+        int half_size = size / 2;
+        
+        for (int chunkstart = 0; chunkstart < n; chunkstart += size) {
+            for (int k = 0; k < half_size; k++) {
+                std::complex<double> twiddle = exp(-I * (2.0 * M_PI * k / size));
+                std::complex<double> t = twiddle * out(chunkstart + k + half_size);
+                std::complex<double> u = out(chunkstart + k); 
+                out(chunkstart + k ) = u + t; 
+                out(chunkstart + k + half_size) = u - t;
+            }
+        }
+    }
 
     return out;
 }
@@ -201,7 +245,23 @@ NDArray<std::complex<double>> iterative_fft_1d(NDArray<std::complex<double>> in)
 
     NDArray<std::complex<double>> out = NDArray<std::complex<double>>::empty({ in.shape[0] });
 
-    // Your code here
+    for (int i = 0; i < n; i++) {
+        out(bitReverse(i, log2n))= in(i);
+    }
+
+    for (int size = 2; size <= n; size *=2) {
+        int half_size = size / 2;
+        
+        for (int chunkstart = 0; chunkstart < n; chunkstart += size) {
+            for (int k = 0; k < half_size; k++) {
+                std::complex<double> twiddle = exp(-I * (2.0 * M_PI * k / size));
+                std::complex<double> t = twiddle * out(chunkstart + k + half_size);
+                std::complex<double> u = out(chunkstart + k); 
+                out(chunkstart + k ) = u + t; 
+                out(chunkstart + k + half_size) = u - t;
+            }
+        }
+    }
 
     return out;
 }
@@ -223,7 +283,23 @@ NDArray<std::complex<double>> iterative_ifft_1d(NDArray<std::complex<double>> in
 
     NDArray<std::complex<double>> out = NDArray<std::complex<double>>::empty({ in.shape[0] });
 
-    // Your code here
+    for (int i = 0; i < n; i++) {
+        out(bitReverse(i, log2n))= in(i);
+    }
+
+    for (int size = 2; size <= n; size *=2) {
+        int half_size = size / 2;
+        
+        for (int chunkstart = 0; chunkstart < n; chunkstart += size) {
+            for (int k = 0; k < half_size; k++) {
+                std::complex<double> twiddle = exp(I * (2.0 * M_PI * k / size));
+                std::complex<double> t = twiddle * out(chunkstart + k + half_size);
+                std::complex<double> u = out(chunkstart + k); 
+                out(chunkstart + k ) = u + t; 
+                out(chunkstart + k + half_size) = u - t;
+            }
+        }
+    }
 
     return out;
 }
