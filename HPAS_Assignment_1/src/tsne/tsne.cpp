@@ -77,8 +77,42 @@ float TSNE::getAccuracy()
 	NDArray<unsigned int> nearestNeighbours = NearestNeighbourCalculator::calculateNearestNeighbours(pointsNDArray);
 
 	float accuracy = 0.0f;
+	float totalOverlap = 0.0f;
+
+	int numPoints = nearestNeighbours.shape[0];
+	int numNeighbours = nearestNeighbours.shape[1];
 
 	// Compute the accuracy with your metric
+	for (int i = 0; i < numPoints; i++)
+	{
+		int matchCount = 0;
+
+		// Compare the nearest neighbours in the high-dimensional space with those in the low-dimensional space
+		for (int j = 0; j < numNeighbours; j++)
+		{
+			unsigned int highNeighbour = highDimNearestNeighbours(i, j);
+
+			for (int k = 0; k < numNeighbours; k++)
+			{
+				unsigned int lowNeighbour = nearestNeighbours(i, k);
+
+				if (highNeighbour == lowNeighbour)
+				{
+					// If there is a match, increment the match count and 
+					// break out of the inner loop to avoid counting multiple matches for the same neighbour
+					matchCount++;
+					break;
+				}
+			}
+			
+		}
+		// The overlap for this point is calculated as the ratio of the number of matching neighbours to the total number of neighbours, and this value is accumulated into the total overlap.
+		totalOverlap += (float) matchCount / (float)numNeighbours;
+	}
+
+	// The final accuracy is computed as the average overlap across all points, which gives an indication of how well the low-dimensional embedding preserves the local structure of the high-dimensional data.
+	accuracy = totalOverlap / (float)numPoints;
+	std::cout << "Accuracy: " << accuracy << std::endl;
 
 	return accuracy;
 }
