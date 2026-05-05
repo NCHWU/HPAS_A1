@@ -20,6 +20,17 @@ NDArray<prec_float> FItSNE::precalculateLagrangeDenominator(NDArray<prec_float>&
     NDArray<prec_float> lagrangeDenominator = NDArray<prec_float>::empty({ (size_t)numInterpolationPoints });
 
     // Your code here
+    for (size_t i = 0;i<numInterpolationPoints;i++){
+        prec_float denominator = 1.0;
+        prec_float xi = interpolationPointsInInterval(i);
+        for (size_t j = 0;j<numInterpolationPoints;j++){
+            if (i != j){
+            prec_float xj = interpolationPointsInInterval(j);
+            denominator *= xi - xj;
+            }
+        }
+        lagrangeDenominator(i) = denominator;
+    }
 
     LOG_TIME("Calculating lagrange denominator");
     return lagrangeDenominator;
@@ -38,6 +49,15 @@ NDArray<vec> FItSNE::calculateIntervalsLowerBounds(prec_float min_coord, prec_fl
     double intervalWidth = (max_coord - min_coord) / static_cast<double>(numIntervals);
 
 	// Your code here
+    for (size_t x = 0;x< numIntervals;x++)
+    {
+        for (size_t y = 0;y<numIntervals;y++)
+        {
+            double x_world = min_coord + x * intervalWidth;
+            double y_world = min_coord + y * intervalWidth;
+            intervalsLowerBounds(x, y) = vec(x_world, y_world);
+        }
+    }
 
 	return intervalsLowerBounds;
 }
@@ -55,6 +75,13 @@ NDArray<vec> FItSNE::calculatePointsRelativeToGrid(NDArray<vec>& points, prec_fl
     NDArray<vec> pointsRelativeToGrid = NDArray<vec>::empty({ points.shape[0] });
 
 	// Your code here
+    double gridWidth = max_coord - min_coord;
+    for (size_t i = 0;i<points.shape[0];i++)
+    {
+        double x_relative = (points(i).x - min_coord) / gridWidth;
+        double y_relative = (points(i).y - min_coord) / gridWidth;
+        pointsRelativeToGrid(i) = vec(x_relative, y_relative);
+    }
 
 	return pointsRelativeToGrid;
 }
@@ -73,6 +100,18 @@ NDArray<glm::ivec2> FItSNE::calculateIntervalIndices(NDArray<vec>& pointsRelativ
     NDArray<glm::ivec2> intervalIndices = NDArray<glm::ivec2>::empty({ numPoints });
 
 	// Your code here
+    for (size_t i = 0;i<numPoints;i++)
+    {
+        vec relativePos = pointsRelativeToGrid(i);
+        int x_id = std::floor(relativePos.x / relative_interval_width);
+        int y_id = std::floor(relativePos.y / relative_interval_width);
+        
+        //boundary check, in case over boundary:)
+        x_id = std::clamp(x_id, 0, static_cast<int>(numIntervals) - 1);
+        y_id = std::clamp(y_id, 0, static_cast<int>(numIntervals) - 1);
+
+        intervalIndices(i) = glm::ivec2(x_id,y_id);
+    }
 
     return intervalIndices;
 }
@@ -103,6 +142,9 @@ NDArray<vec> FItSNE::calculatePointsRelativeToInterval(NDArray<vec>& pointsRelat
         // and a point near the top right corner would have this position be near (1, 1).
         
         // pointsRelativeToInterval(i) = ...
+        double x_relative = (curPointRelativeInGrid.x - (intervalIndex.x*relative_interval_width)) / relative_interval_width;
+        double y_relative = (curPointRelativeInGrid.y - (intervalIndex.y*relative_interval_width)) / relative_interval_width;
+        pointsRelativeToInterval(i) = vec(x_relative, y_relative);
 
         assert(pointsRelativeToInterval(i).x >= 0);
         assert(pointsRelativeToInterval(i).y >= 0);
@@ -139,8 +181,15 @@ NDArray<vec> FItSNE::calculateInterpolationPoints(NDArray<vec>& intervalsLowerBo
                     // and none are on the interval boundary.
 
                     // y_tilde = ...
+                    vec intervalLB = intervalsLowerBounds(x,y);
+                    double x_world = intervalLB.x + h/2 + px * h;
+                    double y_world = intervalLB.y + h/2 + py * h;
 
-                    interpolationPoints(y * numInterpolationPoints + py, x * numInterpolationPoints + px) = y_tilde;
+                    size_t x_Big = x*numInterpolationPoints + px;
+                    size_t y_Big = y*numInterpolationPoints + py;
+
+                    y_tilde = vec(x_world, y_world);
+                    interpolationPoints(y_Big, x_Big) = y_tilde;
                 }
             }
         }
@@ -164,7 +213,17 @@ NDArray<double> FItSNE::calculateCharges(NDArray<vec>& points)
     NDArray<double> charges = NDArray<double>::empty({ points.size(), (size_t)n_terms });
 
     // Compute the charges for each point here
+    for (size_t i = 0; i < numPoints; i++)
+    {
+    vec point = points(i);
+    double x = point.x;
+    double y = point.y;
 
+    charges(i, 0) = 1.0;
+    charges(i, 1) = x;
+    charges(i, 2) = y;
+    charges(i, 3) = x*x + y*y;
+    }
 	return charges;
 }
 
@@ -298,7 +357,11 @@ NDArray<prec_float> FItSNE::calculatePotentialsQij(
         // Multiply the ffts together
         NDArray<std::complex<double>> result_fft = NDArray<std::complex<double>>::empty({ w_fft.shape[0], w_fft.shape[1] });
 
-
+        for (size_t x = 0;x<w_fft.shape[0];x++){
+            for (size_t y = 0;y < w_fft.shape[1];y++){
+                result_fft(x,y) = w_fft(x,y) * kernel_fft(x,y);
+            }
+        }
 
         LOG_TIME("Multiplying the ffts");
 
@@ -378,9 +441,23 @@ double FItSNE::calculateSumQ(NDArray<vec>& points, NDArray<prec_float>& potentia
 	const size_t numPoints = points.size();
 
 	// Compute the sum of charges here
+    for (size_t i = 0; i < numPoints; i++)
+    {
+    vec point = points(i);
+    double x = point.x;
+    double y = point.y;
 
+    double p0 = potentialsQij(i, 0);
+    double p1 = potentialsQij(i, 1);
+    double p2 = potentialsQij(i, 2);
+    double p3 = potentialsQij(i, 3);
+
+    sum_Q += p0*(1 + x*x + y*y) 
+                - 2*p1*x
+                - 2*p2*y 
+                + p3;
+    }
     LOG_TIME("Calculating SumQ");
-
 	return sum_Q;
 }
 
@@ -527,7 +604,14 @@ void FItSNE::computeNegativeGradient(NDArray<vec>& points, NDArray<vec>& gradien
         /*
          * TODO: Implement the negative force calculation here
          */
+        
+         double p0 = potentialsQij(i, 0);
+        double p1 = potentialsQij(i, 1);
+        double p2 = potentialsQij(i, 2);
 
+        negativeForce = vec(point.x * p0 - p1,
+                            point.y * p0 - p2) / sum_Q;
+        
 		gradient(i) += 4.0 * negativeForce;
     }
 
