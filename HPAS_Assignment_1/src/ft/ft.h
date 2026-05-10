@@ -32,3 +32,7 @@ NDArray<double> ifft_2d(NDArray<std::complex<double>> in, bool useIterative = tr
 NDArray<std::complex<double>> dft_2d(NDArray<double> in);
 
 NDArray<double> idft_2d(NDArray<std::complex<double>> in);
+
+NDArray<std::complex<double>> cooley_tukey_fft_1d(NDArray<std::complex<double>> in);
+
+NDArray<std::complex<double>> iterative_fft_1d(NDArray<std::complex<double>> in);
