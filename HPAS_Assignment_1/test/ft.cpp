@@ -1,11 +1,15 @@
 #include <iostream>
 #include <catch2/catch_all.hpp>
 #include <random>
+#include <chrono>
+#include <algorithm>
+#include <vector>
 
 #include <ft/ft.h>
 
 //#define RUN_BENCHMARKS // Uncomment if you would like to run the example benchmark
 //#define FFT_2D_TEST_OUT
+#define RUN_FFT_SCALING // Q5 scaling experiment
 
 std::vector<double> generate_random_vector(size_t size) {
     std::vector<double> data(size);
@@ -137,8 +141,7 @@ TEST_CASE("Recursive FFT (complex) matches DFT", "[fft-1d]") {
 
 }
 
-// Verifies the recursive IFFT against the verified IDFT. The recursive IFFT
-// returns an un-normalized result, so we divide by N before comparing.
+// Compare recursive IFFT to IDFT. IFFT isn't normalized, so divide by N.
 TEST_CASE("Recursive IFFT matches IDFT", "[ifft-1d]") {
     auto size = GENERATE(1, 2, 4, 8, 256, 1024);
 
@@ -159,8 +162,7 @@ TEST_CASE("Recursive IFFT matches IDFT", "[ifft-1d]") {
     REQUIRE(idft_out.approxEquals(ifft_normalized));
 }
 
-// Verifies the iterative FFT on real input produces the same Fourier
-// coefficients as the verified quadratic DFT.
+// Iterative FFT on real input should match the DFT.
 TEST_CASE("Iterative FFT (real) matches DFT", "[fft-1d]") {
     auto size = GENERATE(1, 2, 4, 8, 256, 1024);
 
@@ -174,8 +176,7 @@ TEST_CASE("Iterative FFT (real) matches DFT", "[fft-1d]") {
     REQUIRE(dft_out.approxEquals(fft_out));
 }
 
-// Verifies the iterative FFT on complex input (with zero imaginary part)
-// matches the verified DFT applied to the equivalent real signal.
+// Same as above but with a complex input (zero imaginary part).
 TEST_CASE("Iterative FFT (complex) matches DFT", "[fft-1d]") {
     auto size = GENERATE(1, 2, 4, 8, 256, 1024);
 
@@ -194,8 +195,7 @@ TEST_CASE("Iterative FFT (complex) matches DFT", "[fft-1d]") {
     REQUIRE(dft_out.approxEquals(fft_out));
 }
 
-// Verifies the iterative IFFT against the verified IDFT. The iterative IFFT
-// returns an un-normalized result, so we divide by N before comparing.
+// Compare iterative IFFT to IDFT, same /N normalization as the recursive case.
 TEST_CASE("Iterative IFFT matches IDFT", "[ifft-1d]") {
     auto size = GENERATE(1, 2, 4, 8, 256, 1024);
 
@@ -216,8 +216,7 @@ TEST_CASE("Iterative IFFT matches IDFT", "[ifft-1d]") {
     REQUIRE(idft_out.approxEquals(ifft_normalized));
 }
 
-// Verifies the 2D FFT against the verified 2D DFT, exercising both the
-// iterative and recursive 1D backends used internally by fft_2d.
+// 2D FFT vs 2D DFT, run with both 1D backends.
 TEST_CASE("2D FFT matches 2D DFT", "[fft-2d]") {
     auto useIterative = GENERATE(true, false);
     size_t size = 64;
@@ -234,8 +233,7 @@ TEST_CASE("2D FFT matches 2D DFT", "[fft-2d]") {
     REQUIRE(dft_out.approxEquals(fft_out));
 }
 
-// Verifies the 2D IFFT against the verified 2D IDFT (ifft_2d already
-// performs the /N normalization internally), for both 1D backends.
+// 2D IFFT vs 2D IDFT. ifft_2d already normalizes internally.
 TEST_CASE("2D IFFT matches 2D IDFT", "[ifft-2d]") {
     auto useIterative = GENERATE(true, false);
     size_t size = 64;
@@ -252,3 +250,79 @@ TEST_CASE("2D IFFT matches 2D IDFT", "[ifft-2d]") {
     REQUIRE(idft_out.shape[1] == ifft_out.shape[1]);
     REQUIRE(idft_out.approxEquals(ifft_out));
 }
+
+#ifdef RUN_FFT_SCALING
+// Q5: time recursive vs iterative FFT across N = 2^4..2^20 and print
+// time / (N log N) to check the asymptote. Run with:
+//   ./build/HPAS_A1_Tests "[fft-scaling]" -s > scaling.csv
+TEST_CASE("FFT scaling: recursive vs iterative", "[fft-scaling]") {
+    constexpr int MIN_LOG2 = 4;
+    constexpr int MAX_LOG2 = 20;
+    constexpr int REPS = 7;
+
+    volatile double sink = 0.0;
+
+    std::cout << "N,log2N,recursive_ns,iterative_ns,iter_speedup,"
+              << "recursive_per_NlogN,iterative_per_NlogN\n";
+
+    for (int k = MIN_LOG2; k <= MAX_LOG2; k++) {
+        const size_t N = static_cast<size_t>(1) << k;
+
+        auto data = generate_random_vector(N);
+        NDArray<double> in(data);
+
+        std::vector<double> rec_times;
+        std::vector<double> itr_times;
+        rec_times.reserve(REPS);
+        itr_times.reserve(REPS);
+
+        // recursive gets too slow past 2^18, skip it for larger N
+        const bool run_recursive = (k <= 18);
+
+        for (int r = 0; r < REPS; r++) {
+            if (run_recursive) {
+                auto t0 = std::chrono::steady_clock::now();
+                auto out = cooley_tukey_fft_1d(in);
+                auto t1 = std::chrono::steady_clock::now();
+                sink += out(0).real();
+                rec_times.push_back(
+                    std::chrono::duration<double, std::nano>(t1 - t0).count());
+            }
+
+            {
+                auto t0 = std::chrono::steady_clock::now();
+                auto out = iterative_fft_1d(in);
+                auto t1 = std::chrono::steady_clock::now();
+                sink += out(0).real();
+                itr_times.push_back(
+                    std::chrono::duration<double, std::nano>(t1 - t0).count());
+            }
+        }
+
+        auto median = [](std::vector<double>& v) {
+            std::sort(v.begin(), v.end());
+            return v[v.size() / 2];
+        };
+
+        double rec_ns = run_recursive ? median(rec_times) : 0.0;
+        double itr_ns = median(itr_times);
+        double NlogN = static_cast<double>(N) * k;
+
+        std::cout << N << "," << k << ",";
+        if (run_recursive) std::cout << rec_ns;
+        else std::cout << "NA";
+        std::cout << "," << itr_ns << ",";
+        if (run_recursive) std::cout << (rec_ns / itr_ns);
+        else std::cout << "NA";
+        std::cout << ",";
+        if (run_recursive) std::cout << (rec_ns / NlogN);
+        else std::cout << "NA";
+        std::cout << "," << (itr_ns / NlogN) << "\n";
+    }
+
+    // print the sink so the compiler can't elide the FFT calls
+    std::cout << "# sink=" << sink << "\n";
+
+    SUCCEED("scaling experiment complete; see CSV above");
+}
+#endif
