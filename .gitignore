@@ -1,0 +1,10 @@
+# macOS cruft
+.DS_Store
+__MACOSX/
+
+# Large volume datasets — keep local only, do not commit
+A2/HPAS_Assignment_2_volume_data/
+
+# Build artifacts
+build/
+out/
