@@ -31,6 +31,7 @@ DISABLE_WARNINGS_POP()
 #include "framework/Camera.h"
 #include "UserInterface.h"
 #include "tsne/tsne.h"
+#include "tsne/GradientComputers/QuadtreeGradientCompute.h"
 #include "tsne/GradientComputers/FItSNE.h"
 #include "tsne/GradientComputers/WrappedFItSNE.h"
 #include "tsne/square_distance/NaiveSquareDistanceCalculator.h"
@@ -43,6 +44,7 @@ DISABLE_WARNINGS_POP()
 TSNEGradientCompute& getActiveGradientComputer(
     int activeGradientComputer,
     TSNEGradientCompute& exactGradientComputer,
+    QuadtreeTSNE& quadtreeGradientComputer,
     FItSNE& fItSNEGradientComputer,
     WrappedFItSNE& wrappedFItSNEGradientComputer)
 {
@@ -50,6 +52,8 @@ TSNEGradientCompute& getActiveGradientComputer(
 	{
 		case 0:
 			return exactGradientComputer;
+		case 1:
+			return quadtreeGradientComputer;
 		case 2:
 			return fItSNEGradientComputer;
 		case 3:
@@ -100,6 +104,7 @@ int main(int /* argc */, char** argv)
 	NearestNeighbourCalculator::enable();
 
 	TSNEGradientCompute exactGradientComputer = TSNEGradientCompute();
+    QuadtreeTSNE quadtreeGradientComputer = QuadtreeTSNE();
     FItSNE fItSNEGradientComputer = FItSNE();
     WrappedFItSNE wrappedFItSNEGradientComputer = WrappedFItSNE();
 
@@ -110,9 +115,9 @@ int main(int /* argc */, char** argv)
 	debugRenderData.enabled = false;
 
     // This implementation relies on the GPU
-    GPUSquareDistanceCalculator squareDistanceCalculator;
+    // GPUSquareDistanceCalculator squareDistanceCalculator;
     // If this one doesn't work, use the naive one:
-	// NaiveSquareDistanceCalculator squareDistanceCalculator;
+	NaiveSquareDistanceCalculator squareDistanceCalculator;
 
 
 	int numberOfNeighboursConsidering = 30;
@@ -144,6 +149,7 @@ int main(int /* argc */, char** argv)
                 TSNEGradientCompute& activeGradientComputer = getActiveGradientComputer(
                     settings.activeGradientComputerIndex,
                     exactGradientComputer,
+                    quadtreeGradientComputer,
                     fItSNEGradientComputer,
                     wrappedFItSNEGradientComputer);
 
@@ -163,7 +169,7 @@ int main(int /* argc */, char** argv)
 
         ImGui::Text("Active gradient computer");
         ImGui::RadioButton("Exact", &settings.activeGradientComputerIndex, 0);
-		//ImGui::RadioButton("Quadtree", &settings.activeGradientComputerIndex, 1);
+		ImGui::RadioButton("Quadtree", &settings.activeGradientComputerIndex, 1);
 		ImGui::RadioButton("FItSNE", &settings.activeGradientComputerIndex, 2);
 		ImGui::RadioButton("Wrapped FItSNE", &settings.activeGradientComputerIndex, 3);
 
@@ -195,8 +201,9 @@ int main(int /* argc */, char** argv)
 
 		static float accuracy = -1.0f;
 
-        if (ImGui::Button("Compute accuracy"))
+        if (ImGui::Button("Compute accuracy") || glfwGetMouseButton(WindowHandler::getWindow(), GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
         {
+            debugRenderData.clear();
 			accuracy = tsne.getAccuracy();
         }
 
@@ -205,9 +212,19 @@ int main(int /* argc */, char** argv)
             ImGui::Text("Accuracy: %.2f", accuracy);
         }
 
+		if (ImGui::Button("Compare exact and quadtree gradient computers"))
+		{
+			tsne.compareGradientComputers(quadtreeGradientComputer, exactGradientComputer, debugRenderData);
+		}
+
         if (ImGui::Button("Compare exact and fitsne gradient computers"))
         {
 			tsne.compareGradientComputers(exactGradientComputer, fItSNEGradientComputer, debugRenderData);
+        }
+
+        if (ImGui::Button("Compare quadtree and fitsne gradient computers"))
+        {
+			tsne.compareGradientComputers(quadtreeGradientComputer, fItSNEGradientComputer, debugRenderData);
         }
 
 		ImGui::Checkbox("Run t-SNE", &runningTSNE);
@@ -225,6 +242,9 @@ int main(int /* argc */, char** argv)
         ImGui::Checkbox("Follow data", &settings.followData);
 		tooltip("Automatically follow the data when it moves");
 
+        ImGui::SliderFloat("Theta", &quadtreeGradientComputer.theta, 0.1f, 3.0f);
+		ImGui::DragInt("Bucket size", &quadtreeGradientComputer.bucketSize, 1.0f, 1, 1000);
+
 		ImGui::Checkbox("Use PCA", &settings.usePCA);
 		tooltip("Use PCA to set a more reasonable initial embedding of the high-dimensional data into 2D");
 
@@ -234,6 +254,7 @@ int main(int /* argc */, char** argv)
 			TSNEGradientCompute& activeGradientComputer = getActiveGradientComputer(
                 settings.activeGradientComputerIndex,
 				exactGradientComputer,
+				quadtreeGradientComputer,
 				fItSNEGradientComputer,
 				wrappedFItSNEGradientComputer);
 

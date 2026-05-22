@@ -22,6 +22,11 @@ namespace WindowHandler {
         // OpenGL profile: core
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+        #ifdef __APPLE__
+        // Required on macOS for a 4.1 core context
+        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+        #endif
+
         // Making a GLFW window
         window = glfwCreateWindow(width, height, title, NULL, NULL);
         if (window == NULL) {

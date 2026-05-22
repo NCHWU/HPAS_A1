@@ -8,7 +8,7 @@ UserInterface::UserInterface(GLFWwindow* window, float dpiScale)
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     defaultFont = io.Fonts->AddFontFromFileTTF(RESOURCE_ROOT "framework/fonts/RobotoMono-Medium.ttf", 16.0f * dpiScale);
     ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 130");
+    ImGui_ImplOpenGL3_Init("#version 150");
 }
 
 UserInterface::~UserInterface()
