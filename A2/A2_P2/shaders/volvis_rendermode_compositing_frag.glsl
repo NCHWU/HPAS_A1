@@ -144,6 +144,22 @@ void sampleRange(float startT, float endT, vec3 direction, vec3 cameraPos, inout
         // ====== TODO: IMPLEMENT ========
         // Sample the volume data and use it to composite the samples in C and A
 
+        vec3 samplePos = cameraPos + t * direction;
+
+        float intensity = sampleData(samplePos);
+        float normalizedIntensity = clamp(intensity * volumeMaxValues.x, 0.0, 1.0);
+
+        vec4 sampleColor = texture(transferFunction, vec2(normalizedIntensity, 0.5));
+
+        float alpha = sampleColor.a;
+
+        C += (1.0 - A) * alpha * sampleColor.rgb;
+        A += (1.0 - A) * alpha;
+
+        if (A > 0.99) {
+            break;
+        }
+
 
     }
 }
@@ -197,9 +213,28 @@ void main()
         // Take into account whether the ray is entering or exiting a node
         // and whether the node is empty or filled
         
+
+        bool shouldSample = false;
+
         // Entering a node
         if (event.isEntry == 1) {
             // Handle ray entry event
+
+            if (event.occupancyClass == EVENT_OCCUPANCY_NONEMPTY && hasNextEvent) {
+                RayEvent nextEvent = rayEvents[event.next];
+
+                startT = event.distanceFromCamera;
+                endT = nextEvent.distanceFromCamera;
+
+                if (endT < startT) {
+                    float temp = startT;
+                    startT = endT;
+                    endT = temp;
+                }
+
+                shouldSample = true;
+
+            }
 
         }
         // Exiting a node
@@ -208,11 +243,11 @@ void main()
 
         }
 
-        if (startT == endT) {
-			// No rendering needed
-			currentEventPointer = event.next;
-			continue;
-		}
+      
+        if (!shouldSample || endT <= startT) {
+            currentEventPointer = event.next;
+            continue;
+        }
 
         // Perform the sampling operation
         sampleRange(startT, endT, direction, cameraPos, C, A);

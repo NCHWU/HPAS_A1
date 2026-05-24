@@ -65,10 +65,50 @@ void main() {
     // and check if the ray intersects with each box.
     // Then use that information to create ray events.
 
+    //Check each bounding box for intersection with the ray
+    for (int i = 0; i < numBoundingBoxes; i++) {
 
+        // Get the current bounding box
+        BoundingBox box = boundingBoxes[i];
+
+        // If the ray intersects with the bounding box, create ray events for entry and exit points
+        if (intersectBoundingBox(box, cameraPos, rayDir, tMin, tMax)) {
+
+            // Insert ray events for entry and exit points
+            if (box.isFront == 1) {
+                insertRayEvent(max(tMin, 0.0), 1, box.occupancyClass, head);
+            } else {
+                insertRayEvent(tMax, 0, box.occupancyClass, head);
+            }
+
+            // For visualization: accumulate occupancy class values along the ray
+            //sum += vec3(box.occupancyClass) * 0.05;
+
+
+            // Skip colouring the root back/front boxes in debug view only.
+            // Root is usually first and last because traverse emits root before children and after children.
+
+           // Strong debug visualization: show every intersected box clearly
+            vec3 debugColor;
+
+            if (box.occupancyClass == 1) {
+                debugColor = vec3(1.0, 0.25, 0.0);   // non-empty = orange/red
+            } else {
+                debugColor = vec3(0.0, 0.6, 1.0);    // empty = bright cyan/blue
+            }
+
+            if (box.isFront == 1) {
+                debugColor = mix(debugColor, vec3(1.0), 0.25); // make front face lighter
+            }
+
+            sum += debugColor * 0.12;
+
+        }
+    }
 
     // Visualize the accumulated sum
-    FragColor = vec4(sum, 1.0);
+   // FragColor = vec4(sum, 1.0);
+   FragColor = vec4(clamp(sum, 0.0, 1.0), 1.0);
 
     // Store the head of the linked list in the heads array
     heads[pixelIndex] = head;

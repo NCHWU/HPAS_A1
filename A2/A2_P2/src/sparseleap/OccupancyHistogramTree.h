@@ -5,6 +5,8 @@
 #include <glm/glm.hpp>
 #include "volume/volume.h"
 #include "render/render_config.h"
+#include <limits>
+#include <algorithm>
 
 enum class Occupancy {
     Empty = 0,
@@ -106,7 +108,17 @@ public:
             // Sort the children based on their distance to the camera
             // Sort in descending order, so the farthest child is first
 
-            return 0;
+            // Calculate the center of the bounding box for both children
+            glm::vec3 centerA = (glm::vec3(a->boundingBoxMin) + glm::vec3(a->boundingBoxMax)) * 0.5f;
+            glm::vec3 centerB = (glm::vec3(b->boundingBoxMin) + glm::vec3(b->boundingBoxMax)) * 0.5f;
+
+            // Calculate the squared distance from the camera to the center of each child
+            float distanceA = glm::dot(centerA - cameraPos, centerA - cameraPos);
+            float distanceB = glm::dot(centerB - cameraPos, centerB - cameraPos);
+
+            // Return true if child a is farther from the camera than child b, so that a comes before b in the sorted order
+            return distanceA > distanceB;
+
         });
 
         // Sort the children of this node based on their distance to the camera
@@ -140,7 +152,38 @@ public:
         // Then, recursively traverse the children of this node and emit their bounding boxes as well.
         // Finally, also emit the front-facing bounding box for this node.
 
+        bool shouldEmit = false;
 
+        if (parent == nullptr) {
+            shouldEmit = true;
+        } else if (node->getOccupancyClass() != parent->getOccupancyClass()) {
+            shouldEmit = true;
+        }
+
+        if (shouldEmit) {
+            // Emit back-facing bounding box
+            geometry.min = glm::vec3(node->boundingBoxMin);
+            geometry.max = glm::vec3(node->boundingBoxMax);
+            geometry.occupancyClass = static_cast<int>(node->getOccupancyClass());
+            geometry.isFront = 0;
+            emittedGeometry.push_back(geometry);
+            addedGeometry = true;
+        }
+
+        if (!node->isLeaf) {
+
+            for (int i = 0; i < 8; i++) {
+                if (node->children[i] != nullptr) {
+                    node->children[i]->traverse(emittedGeometry);
+                }
+            }
+        }
+
+        if (addedGeometry) {
+            geometry.isFront = 1;
+            emittedGeometry.push_back(geometry);
+        }
+      
     }
 
     /*
@@ -173,7 +216,66 @@ public:
             // Spawn a leaf node, making sure that the occupancy class is set correctly
             // The parent reference can be set to nullptr, since it is assigned later
 
-            return new OHTNode(min, max, true, nullptr, Occupancy::Empty);
+            // Get isovalue, transfer function size, start and range for the transfer function from the render config
+            float isovalue = renderConfig.isoValue;
+            int tfSize = renderConfig.tfColorMap.size();
+            float start = renderConfig.tfColorMapIndexStart;
+            float range = renderConfig.tfColorMapIndexRange;
+
+            bool isNonEmpty = false;
+
+            // Calculate the min and max values for the block
+            float minVal = std::numeric_limits<float>::max();
+            float maxVal = std::numeric_limits<float>::lowest();
+
+            // Iterate through the voxels in the block to find the min and max values, and check if the block is non-empty based on the render mode
+            for (int z = min.z; z < max.z && !isNonEmpty; ++z) {
+                for (int y = min.y; y < max.y && !isNonEmpty; ++y) {
+                    for (int x = min.x; x < max.x; ++x) {
+
+                        // Get the voxel value at (x, y, z)
+                        float voxelValue = volume->getVoxel(x, y, z);
+
+                        // Update the min and max values for the block
+                        minVal = std::min(minVal, voxelValue);
+                        maxVal = std::max(maxVal, voxelValue);
+
+                        // For compositing, a block is non-empty if there is any opacity in the transfer function between the min and max values of the block
+                        if (renderConfig.renderMode == render::RenderMode::RenderComposite) {
+
+                            // If the range is 0, it means all values in the block are the same, so we only need to check one value
+                            if (range > 0.0f) {
+
+                                // For compositing, we need to check if there is any opacity in the transfer function for the range of values in the block
+                                int index = static_cast<int>((voxelValue - start) / range * tfSize);
+                                index = std::clamp(index, 0, tfSize - 1);
+
+                                // Get the alpha value from the transfer function color map
+                                float alpha = renderConfig.tfColorMap[index].a;
+
+                                // If there is any opacity, the block is non-empty
+                                if (alpha > 0.01f) { // small threshold
+                                    isNonEmpty = true;
+                                    break;
+                                } else {
+                                    isNonEmpty = true; // safe fallback
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // For isosurface rendering, a block is active if the iso value is between the min and max values of the block
+            if (renderConfig.renderMode == render::RenderMode::RenderIso) {
+
+                // For isosurface rendering, a block is active if the iso value is between the min and max values of the block
+                isNonEmpty = (isovalue >= minVal && isovalue <= maxVal) ? true : false;
+            }
+                    
+            // Create the leaf node with the correct occupancy class
+            return new OHTNode(min, max, true, nullptr, isNonEmpty ? Occupancy::NonEmpty : Occupancy::Empty);
         }
 
         // Create the internal node

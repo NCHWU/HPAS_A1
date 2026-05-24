@@ -480,6 +480,7 @@ void GPURenderer::render()
         glBindBuffer(GL_ATOMIC_COUNTER_BUFFER, m_atomicSampleCounterBuffer);
         GLuint initialCounterValue = 0;
         glBufferData(GL_ATOMIC_COUNTER_BUFFER, sizeof(GLuint), &initialCounterValue, GL_DYNAMIC_DRAW);
+        glBindBufferBase(GL_ATOMIC_COUNTER_BUFFER, 4, m_atomicSampleCounterBuffer);
     }
 
     // when setting the gui to show front faces or directions we render the corresponding texture

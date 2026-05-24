@@ -108,7 +108,35 @@ float sampleData(vec3 at) {
 // Note: The function can be copied over to compositing shader once implemented
 vec4 calculateGradient(vec3 samplePos, vec3 voxelSize)
 {
-    vec4 gradient = vec4(0.);
+    vec4 gradient = vec4(0.0);
+
+    vec3 dx = vec3(1.0, 0.0, 0.0);
+    vec3 dy = vec3(0.0, 1.0, 0.0);
+    vec3 dz = vec3(0.0, 0.0, 1.0);
+
+    vec3 maxVoxel = (1.0 / volumeInfo.xyz) - vec3(1.0);
+
+    vec3 px1 = clamp(samplePos + dx, vec3(0.0), maxVoxel);
+    vec3 px0 = clamp(samplePos - dx, vec3(0.0), maxVoxel);
+
+    vec3 py1 = clamp(samplePos + dy, vec3(0.0), maxVoxel);
+    vec3 py0 = clamp(samplePos - dy, vec3(0.0), maxVoxel);
+
+    vec3 pz1 = clamp(samplePos + dz, vec3(0.0), maxVoxel);
+    vec3 pz0 = clamp(samplePos - dz, vec3(0.0), maxVoxel);
+
+    float fx1 = sampleData(px1);
+    float fx0 = sampleData(px0);
+
+    float fy1 = sampleData(py1);
+    float fy0 = sampleData(py0);
+
+    float fz1 = sampleData(pz1);
+    float fz0 = sampleData(pz0);
+
+    gradient.xyz = vec3(fx1 - fx0, fy1 - fy0, fz1 - fz0);
+    gradient.a = length(gradient.xyz);
+
     return gradient;
 }
 
@@ -144,10 +172,16 @@ vec3 getRayDirection(vec2 pixelPosIndex)
  * A: the accumulated alpha
 **/
 bool sampleRange(float startT, float endT, vec3 direction, vec3 cameraPos, out vec3 color) {
+
     float isoValue = renderOptions.z;
     vec3 surfaceColor = vec3(1,1,0);
 
-    for(float t = startT; t <= endT; t += stepSize) {
+    float previousT = startT;
+    vec3 previousPos = cameraPos + previousT * direction;
+    float previousValue = sampleData(previousPos);
+
+
+    for(float t = startT + stepSize; t <= endT; t += stepSize){
         if (doCountSamples) {
             atomicCounterIncrement(sampleCounter);
         }
@@ -156,6 +190,46 @@ bool sampleRange(float startT, float endT, vec3 direction, vec3 cameraPos, out v
         // Sample the volume data and check if it is above the isoValue.
         // Then compute the gradient and use it to shade the surface
 
+        vec3 samplePos = cameraPos + t * direction;
+         float currentValue = sampleData(samplePos);
+
+        bool surface_crossed = (previousValue < isoValue && currentValue >= isoValue) || (previousValue > isoValue && currentValue <= isoValue);
+
+        if (surface_crossed) {
+
+            // Calculate the intersection point using linear interpolation
+            float denom = currentValue - previousValue;
+            float factor = 0.0;
+
+            if (abs(denom) > 1e-6) {
+                factor = (isoValue - previousValue) / denom;
+            }
+
+            float hitT = mix(previousT, t, clamp(factor, 0.0, 1.0));
+            vec3 hitPos = cameraPos + hitT * direction;
+
+            // Calculate the gradient at the intersection point
+            vec4 gradient = calculateGradient(hitPos, volumeInfo.xyz);
+
+            // If shading is enabled, calculate the color using Phong shading, otherwise use the surface color directly
+           if (renderOptions.w > 0.5) {
+                vec3 V = normalize(cameraPos - hitPos);
+                vec3 L = V;
+
+                // Calculate the color using Phong shading
+                color = phongShading(surfaceColor, gradient, L, V);
+            } else {
+
+            // No shading, use the surface color directly
+                color = surfaceColor;
+            }
+
+            return true;
+        }
+
+        // Update previous values for the next iteration
+        previousT = t;
+        previousValue = currentValue;
 
     }
     return false;
@@ -212,9 +286,26 @@ void main()
         // Take into account whether the ray is entering or exiting a node
         // and whether the node is empty or filled
         
+         bool shouldSample = false;
+
         // Entering a node
         if (event.isEntry == 1) {
             // Handle ray entry event
+
+            if (event.occupancyClass == EVENT_OCCUPANCY_NONEMPTY && hasNextEvent) {
+                RayEvent nextEvent = rayEvents[event.next];
+
+                startT = event.distanceFromCamera;
+                endT = nextEvent.distanceFromCamera;
+
+                if (endT < startT) {
+                    float temp = startT;
+                    startT = endT;
+                    endT = temp;
+                }
+                shouldSample = true;
+
+            }
 
         }
         // Exiting a node
@@ -223,11 +314,10 @@ void main()
 
         }
 
-        if (startT == endT) {
-			// No rendering needed
-			currentEventPointer = event.next;
-			continue;
-		}
+        if (!shouldSample || endT <= startT) {
+            currentEventPointer = event.next;
+            continue;
+        }
 
         // Perform the sampling operation
         vec3 color;

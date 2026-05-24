@@ -138,7 +138,21 @@ float Volume::getSampleNearestNeighbourInterpolation(const glm::vec3& coord) con
 // This function returns the trilinear interpolated value at the continuous 3D position given by coord.
 float Volume::getSampleTriLinearInterpolation(const glm::vec3& coord) const
 {
-    return 0.0f;
+    // 1. Check Bounds
+    if (coord.x < 0 || coord.y < 0 || coord.z < 0 || coord.x >= m_dim.x - 1 || coord.y >= m_dim.y - 1 || coord.z >= m_dim.z - 1)
+        return 0.0f;
+
+    // 2. Get the two Z slices that surround the coordinate
+    float z0 = static_cast<int>(std::floor(coord.z));
+    float z1 = z0 + 1;
+    float dz = coord.z - z0;
+
+    // 3. Perform bi-linear interpolation on both Z slices to get g0 and g1
+    float g0 = biLinearInterpolate(glm::vec2(coord.x, coord.y), static_cast<int>(z0));
+    float g1 = biLinearInterpolate(glm::vec2(coord.x, coord.y), static_cast<int>(z1));
+
+    // 4. Perform linear interpolation between g0 and g1 using the factor computed from the Z coordinate
+    return linearInterpolate(g0, g1, dz);
 }
 
 // This function linearly interpolates the value at X using incoming values g0 and g1 given a factor (equal to the positon of x in 1D)
@@ -147,13 +161,40 @@ float Volume::getSampleTriLinearInterpolation(const glm::vec3& coord) const
 //   factor
 float Volume::linearInterpolate(float g0, float g1, float factor)
 {
-    return 0.0f;
+    float result = g0 * (1.0f - factor) + g1 * factor;
+    return result;
 }
+
 
 // This function bi-linearly interpolates the value at the given continuous 2D XY coordinate for a fixed integer z coordinate.
 float Volume::biLinearInterpolate(const glm::vec2& xyCoord, int z) const
 {
-    return 0.0f;
+    // 1. Get the surrounding grid points (x0, y0), (x1, y0), (x0, y1), (x1, y1)
+    float x = xyCoord.x;
+    float y = xyCoord.y;
+
+    float x0 = static_cast<int>(std::floor(x));
+    float y0 = static_cast<int>(std::floor(y));
+
+    float x1 = x0 + 1;
+    float y1 = y0 + 1;
+
+    // 2. Get the weights for the interpolation, which are the distances to the surrounding grid points
+
+    float dx = x - x0;
+    float dy = y - y0;
+
+    // 3. Fetch the voxel values at the surrounding grid points for the given z coordinate
+
+    float g00 = getVoxel(static_cast<int>(x0), static_cast<int>(y0), z);
+    float g10 = getVoxel(static_cast<int>(x1), static_cast<int>(y0), z);
+    float g01 = getVoxel(static_cast<int>(x0), static_cast<int>(y1), z);
+    float g11 = getVoxel(static_cast<int>(x1), static_cast<int>(y1), z);
+
+    // 4. Perform the bi-linear interpolation using the linearInterpolate function
+    float g0 = linearInterpolate(g00, g10, dx);
+    float g1 = linearInterpolate(g01, g11, dx);
+    return linearInterpolate(g0, g1, dy);
 }
 
 
