@@ -16,7 +16,13 @@ void QuadtreeTSNE::precalculate_q_denom(NDArray<vec>& points, DebugRenderData& d
 
 	q_denom_precalculated = 0.0f;
 
-	// Implement the q_denom_precalculated computation using the quadtree here
+	// Implement the q_denom_precalculated computation using the quadtree her
+
+    for(size_t i = 0; i < numPoints; i++){
+        q_denom_precalculated += root.sampleQDenom(points, points(i), static_cast<int>(i), theta);
+    }
+
+    debugRenderData.enabled = debugRenderDataEnabled;
 
 }
 
@@ -45,7 +51,12 @@ void QuadtreeTSNE::computeNegativeGradient(NDArray<vec>& points, NDArray<vec>& g
 	debugRenderData.enabled = false;
 
 	// Implement the negative gradient computation using the quadtree here
-
+	for(size_t i = 0; i < numPoints; i++){
+        vec negGrad = root.sampleNegGradient(points, points(i), static_cast<int>(i), theta);
+        negGrad /= Z;
+        negGrad *= 4.0;
+        gradient(i) -= negGrad;
+    }
 
 	debugRenderData.enabled = debugRenderDataEnabled;
 }
