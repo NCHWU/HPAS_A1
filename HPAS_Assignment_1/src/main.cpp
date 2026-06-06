@@ -67,9 +67,18 @@ void tooltip(const char* text)
 {
 	if (ImGui::IsItemHovered())
 	{
-		ImGui::BeginTooltip();
-		ImGui::TextUnformatted(text);
-		ImGui::EndTooltip();
+		//ImGui::BeginTooltip();
+		//ImGui::TextUnformatted(text);
+		//ImGui::EndTooltip();
+
+        ImGui::BeginTooltip();
+
+        // Limit tooltip width so the text wraps.
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 30.0f);
+        ImGui::TextUnformatted(text);
+        ImGui::PopTextWrapPos();
+
+        ImGui::EndTooltip();
 	}
 }
 
@@ -201,16 +210,89 @@ int main(int /* argc */, char** argv)
 
 		static float accuracy = -1.0f;
 
-        if (ImGui::Button("Compute accuracy") || glfwGetMouseButton(WindowHandler::getWindow(), GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
+        //if (ImGui::Button("Compute accuracy") || glfwGetMouseButton(WindowHandler::getWindow(), GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
+        //{
+            //debugRenderData.clear();
+			//accuracy = tsne.getAccuracy();
+        //}
+
+        //if (accuracy != -1.0f)
+        //{
+          //  ImGui::Text("Accuracy: %.2f", accuracy);
+       // }
+
+        //-----------------
+        // New Improvement for Assignment 3:Replacing the old accuracy UI block with this design for removing "Framing Effect"
+        static float neighbourhoodScore = -1.0f;
+
+        ImGui::Spacing();
+        const ImGuiStyle& style = ImGui::GetStyle();
+
+		// Calculate the height of the panel based on the content and spacing
+        float panelHeight =
+            ImGui::GetTextLineHeightWithSpacing() +   // heading
+            ImGui::GetFrameHeightWithSpacing() +      // button
+            ImGui::GetTextLineHeightWithSpacing() +   // score
+            style.WindowPadding.y * 2.0f;
+
+		// Begin a child window for the neighbourhood preservation score panel
+        ImGui::BeginChild(
+            "NeighbourhoodPreservationPanel",
+            ImVec2(0.0f, panelHeight),
+            true,
+            ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoScrollWithMouse
+        );
+
+		// Heading with tooltip
+        ImGui::Text("Neighbourhood Preservation Score");
+        ImGui::SameLine();
+        ImGui::TextDisabled("(i)");
+        tooltip(
+            "Measures the proportion of nearest neighbours from the original "
+            "high-dimensional data that remain neighbours in the 2D embedding. "
+            "Values range from 0 to 1. Higher values indicate better local "
+            "neighbourhood preservation. It does not measure global distances, "
+            "cluster positions, or overall embedding quality."
+        );
+        ImGui::Spacing();
+
+		// Disable the Calculate button if there is no data
+        bool hasData = tsne.hasPoints();
+
+        ImGui::BeginDisabled(!hasData);
+
+		// show Calculate button once data set is loaded, and calculate the score when it's clicked
+        if (ImGui::Button("Calculate"))
         {
             debugRenderData.clear();
-			accuracy = tsne.getAccuracy();
+            neighbourhoodScore = tsne.getAccuracy();
         }
 
-        if (accuracy != -1.0f)
+        ImGui::EndDisabled();
+
+		// Show the score if it has been calculated, or an appropriate message if it cannot be calculated
+        if (!hasData)
         {
-            ImGui::Text("Accuracy: %.2f", accuracy);
+            ImGui::TextDisabled("Load a dataset first");
         }
+        else if (neighbourhoodScore < 0.0f)
+        {
+            ImGui::TextDisabled("Score: Not calculated");
+        }
+        else if (std::isnan(neighbourhoodScore))
+        {
+            ImGui::TextDisabled("Score: Unable to calculate");
+        }
+        else
+        {
+            ImGui::Text("Score: %.3f", neighbourhoodScore);
+        }
+
+        ImGui::EndChild();
+        ImGui::Spacing();
+
+        //-----------------
 
 		if (ImGui::Button("Compare exact and quadtree gradient computers"))
 		{
