@@ -24,6 +24,27 @@ unsigned int TSNE::getStepIndex() const
 	return stepIndex;
 }
 
+float TSNE::getMeanDisplacement() const
+{
+	return (float)lastMeanDisplacement;
+}
+
+float TSNE::getSmoothedDisplacement() const
+{
+	return (float)smoothedDisplacement;
+}
+
+bool TSNE::isConverged(float threshold) const
+{
+	// can't be converged if nothing has run yet
+	if (smoothedDisplacement < 0.0)
+	{
+		return false;
+	}
+
+	return smoothedDisplacement < threshold;
+}
+
 NDArray<vec>& TSNE::getPoints()
 {
 	return points;
@@ -40,6 +61,10 @@ void TSNE::setPoints(const NDArray<vec>& newPoints)
     this->prev_points = points;
 	this->gradient = NDArray<vec>::empty({ points.size() });
     this->stepIndex = 0;
+
+    // new dataset, so drop the old movement history
+    this->lastMeanDisplacement = -1.0;
+    this->smoothedDisplacement = -1.0;
 }
 
 void TSNE::setPMatrix(const PMatrix& new_p_matrix)
@@ -200,6 +225,26 @@ void TSNE::applyGradient()
 	}
 
 	prev_points = old_points;
+
+	// work out how far the points moved this step on average
+	double totalDisplacement = 0.0;
+#pragma omp parallel for reduction(+:totalDisplacement)
+	for (int i = 0; i < points.size(); i++)
+	{
+		totalDisplacement += glm::length(points(i) - old_points(i));
+	}
+
+	lastMeanDisplacement = totalDisplacement /(double)points.size();
+
+	// keep a smoothed average so the converged label doesn't bounce around
+	if (smoothedDisplacement < 0.0)
+	{
+		smoothedDisplacement = lastMeanDisplacement; // first step
+	}
+	else
+	{
+		smoothedDisplacement = 0.9 * smoothedDisplacement + 0.1 * lastMeanDisplacement;
+	}
 }
 
 void TSNE::resetGradientValues()

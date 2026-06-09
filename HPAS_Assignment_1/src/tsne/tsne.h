@@ -34,6 +34,15 @@ public:
 	// Get the index of the current t-SNE step
 	unsigned int getStepIndex() const;
 
+	// how far the points moved on average last step (-1 if we haven't stepped yet)
+	float getMeanDisplacement() const;
+
+	// same value but smoothed over time, this is what we check for convergence
+	float getSmoothedDisplacement() const;
+
+	// true once the points have basically stopped moving (below threshold)
+	bool isConverged(float threshold) const;
+
 	// Get all points currently loaded into this t-SNE instance
 	NDArray<vec>& getPoints();
 
@@ -87,4 +96,9 @@ protected:
 	prec_float early_exaggeration{ 3.0f };
 	unsigned int early_exaggeration_steps{ 2500 };
 	unsigned int stepIndex{ 0 };
+
+	// how much the points moved last step (-1 = no step yet)
+	prec_float lastMeanDisplacement{ -1.0 };
+	// smoothed version of the above so the converged label doesn't flicker
+	prec_float smoothedDisplacement{ -1.0 };
 };

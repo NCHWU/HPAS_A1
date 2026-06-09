@@ -292,6 +292,75 @@ int main(int /* argc */, char** argv)
         ImGui::EndChild();
         ImGui::Spacing();
 
+        
+        // convergence indicator - shows whether the points are still moving or
+        // have settled, so people don't read an unfinished layout as the final one
+
+        // movement below this counts as converged. slider because the right
+        // number depends on the dataset
+        static float convergenceThreshold = 0.01f;
+
+        ImGui::Spacing();
+
+        // enough height for the heading, status, value and slider
+        float convergencePanelHeight =
+            ImGui::GetTextLineHeightWithSpacing() +
+            ImGui::GetTextLineHeightWithSpacing() +
+            ImGui::GetTextLineHeightWithSpacing() +
+            ImGui::GetFrameHeightWithSpacing() +
+            style.WindowPadding.y * 2.0f;
+
+        ImGui::BeginChild(
+            "ConvergencePanel",
+            ImVec2(0.0f, convergencePanelHeight),
+            true,
+            ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoScrollWithMouse
+        );
+
+        ImGui::Text("Convergence");
+        ImGui::SameLine();
+        ImGui::TextDisabled("(i)");
+        tooltip(
+            "Average distance the points moved on the last step. High means the "
+            "layout is still shifting around, low and steady means it has settled. "
+            "Lower the threshold if you want a stricter cutoff for the 'converged' label."
+        );
+        ImGui::Spacing();
+
+        // nothing to show until t-SNE has actually run a step
+        if (!hasData || tsne.getStepIndex() == 0)
+        {
+            ImGui::TextDisabled("Run t-SNE to measure convergence");
+        }
+        else
+        {
+            // green once it's settled, orange while it's still moving
+            if (tsne.isConverged(convergenceThreshold))
+            {
+                ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "Converged");
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.1f, 1.0f), "Still converging...");
+            }
+
+            ImGui::Text("Movement / step: %.5f", tsne.getMeanDisplacement());
+        }
+
+        // log scale so the tiny values where it actually converges are easy to pick
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 12.0f);
+        ImGui::SliderFloat(
+            "Converged threshold",
+            &convergenceThreshold,
+            0.0001f, 0.1f,
+            "%.4f",
+            ImGuiSliderFlags_Logarithmic
+        );
+
+        ImGui::EndChild();
+        ImGui::Spacing();
+
         //-----------------
 
 		if (ImGui::Button("Compare exact and quadtree gradient computers"))
