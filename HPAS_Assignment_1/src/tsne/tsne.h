@@ -22,6 +22,13 @@ typedef double prec_float;
 typedef glm::dvec2 vec;
 #endif
 
+struct GradientComparisonResult
+{
+	prec_float meanDiffMagnitude{ 0.0 };
+	prec_float meanReferenceGradientMagnitude{ 0.0 };
+	prec_float relativeError{ 0.0 };
+};
+
 class TSNE
 {
 public:
@@ -66,7 +73,7 @@ public:
 
 	float getAccuracy();
 
-	void compareGradientComputers(TSNEGradientCompute& gradientComputer1, TSNEGradientCompute& gradientComputer2, DebugRenderData& debugRenderData);
+	GradientComparisonResult compareGradientComputers(TSNEGradientCompute& gradientComputer1, TSNEGradientCompute& gradientComputer2, DebugRenderData& debugRenderData);
 
 protected:
 

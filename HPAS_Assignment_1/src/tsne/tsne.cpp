@@ -142,7 +142,7 @@ float TSNE::getAccuracy()
 	return accuracy;
 }
 
-void TSNE::compareGradientComputers(TSNEGradientCompute& gradientComputer1, TSNEGradientCompute& gradientComputer2, DebugRenderData& debugRenderData)
+GradientComparisonResult TSNE::compareGradientComputers(TSNEGradientCompute& gradientComputer1, TSNEGradientCompute& gradientComputer2, DebugRenderData& debugRenderData)
 {
 
 	resetGradientValues();
@@ -178,6 +178,7 @@ void TSNE::compareGradientComputers(TSNEGradientCompute& gradientComputer1, TSNE
 
 	meanDiffMagnitude /= gradient1.size();
 	meanGradient1Magnitude /= gradient1.size();
+	prec_float gradientScale = meanGradient1Magnitude == 0.0 ? 1.0 : meanGradient1Magnitude;
 
 	for (unsigned int i = 0; i < gradient1.size(); i++)
 	{
@@ -187,15 +188,20 @@ void TSNE::compareGradientComputers(TSNEGradientCompute& gradientComputer1, TSNE
 		debugRenderData.addLine(points(i), points(i) + glm::normalize(gradient2(i)) * 0.04, glm::vec3(0.0f, 0.0f, 1.0f));
 		*/
 
-		debugRenderData.addLine(points(i), points(i) + -diff(i) / meanGradient1Magnitude * 0.08, glm::vec3(1.0f, 0.0f, 0.0f));
-		
-		debugRenderData.addLine(points(i), points(i) + gradient1(i) / meanGradient1Magnitude * 0.08, glm::vec3(0.0f, 1.0f, 0.0f));
-		debugRenderData.addLine(points(i), points(i) + gradient2(i) / meanGradient1Magnitude * 0.08, glm::vec3(0.0f, 0.0f, 1.0f));
+		debugRenderData.addLine(points(i), points(i) + -diff(i) / gradientScale * 0.08, glm::vec3(1.0f, 0.0f, 0.0f));
+		debugRenderData.addLine(points(i), points(i) + gradient1(i) / gradientScale * 0.08, glm::vec3(0.0f, 1.0f, 0.0f));
+		debugRenderData.addLine(points(i), points(i) + gradient2(i) / gradientScale * 0.08, glm::vec3(0.0f, 0.0f, 1.0f));
 	}
 
-	prec_float error = meanDiffMagnitude / meanGradient1Magnitude;
+	prec_float error = meanGradient1Magnitude == 0.0 ? 0.0 : meanDiffMagnitude / meanGradient1Magnitude;
 
 	std::cout << "Mean diff magnitude: " << meanDiffMagnitude << " (" << error << ")" << std::endl;
+
+	return {
+		meanDiffMagnitude,
+		meanGradient1Magnitude,
+		error
+	};
 }
 
 void TSNE::computeGradient(TSNEGradientCompute& gradientComputer, DebugRenderData& debugRenderData)

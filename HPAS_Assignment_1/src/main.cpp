@@ -130,6 +130,10 @@ int main(int /* argc */, char** argv)
 
 
 	int numberOfNeighboursConsidering = 30;
+    const char* selectedDatasetName = nullptr;
+    bool hasGradientComparisonResult = false;
+    std::string lastGradientComparisonName;
+    GradientComparisonResult lastGradientComparisonResult;
 
     while (true)
     {
@@ -176,37 +180,53 @@ int main(int /* argc */, char** argv)
         // placed between userInterface.start() and userInterface.end()
         userInterface.start();
 
-        ImGui::Text("Active gradient computer");
-        ImGui::RadioButton("Exact", &settings.activeGradientComputerIndex, 0);
-		ImGui::RadioButton("Quadtree", &settings.activeGradientComputerIndex, 1);
-		ImGui::RadioButton("FItSNE", &settings.activeGradientComputerIndex, 2);
-		ImGui::RadioButton("Wrapped FItSNE", &settings.activeGradientComputerIndex, 3);
-
-        if (ImGui::BeginCombo("Load Dataset", "Select..."))
+        if (ImGui::BeginCombo("Load Dataset", selectedDatasetName ? selectedDatasetName : "Select..."))
         {
             if (ImGui::Selectable("MNIST"))
             {
                 MNISTReader mnistReader;
                 mnistReader.readData(tsne, squareDistanceCalculator, settings, numberOfNeighboursConsidering, false);
+                selectedDatasetName = "MNIST";
+                hasGradientComparisonResult = false;
             }
             if (ImGui::Selectable("Big MNIST"))
             {
                 MNISTReader mnistReader;
                 mnistReader.readData(tsne, squareDistanceCalculator, settings, numberOfNeighboursConsidering, true);
+                selectedDatasetName = "Big MNIST";
+                hasGradientComparisonResult = false;
             }
             if (ImGui::Selectable("Myeloid8000"))
             {
                 MyeloidReader myeloidReader;
                 myeloidReader.readData(tsne, squareDistanceCalculator, settings, numberOfNeighboursConsidering);
+                selectedDatasetName = "Myeloid8000";
+                hasGradientComparisonResult = false;
             }
             if (ImGui::Selectable("Planaria"))
             {
                 PlanariaReader planariaReader;
                 planariaReader.readData(tsne, squareDistanceCalculator, settings, numberOfNeighboursConsidering);
+                selectedDatasetName = "Planaria";
+                hasGradientComparisonResult = false;
             }
 
             ImGui::EndCombo();
         }
+
+        if (!selectedDatasetName)
+        {
+            userInterface.end();
+            glfwSwapBuffers(WindowHandler::getWindow());
+            glfwPollEvents();
+            continue;
+        }
+
+        ImGui::Text("Active gradient computer");
+        ImGui::RadioButton("Exact", &settings.activeGradientComputerIndex, 0);
+		ImGui::RadioButton("Quadtree", &settings.activeGradientComputerIndex, 1);
+		ImGui::RadioButton("FItSNE", &settings.activeGradientComputerIndex, 2);
+		ImGui::RadioButton("Wrapped FItSNE", &settings.activeGradientComputerIndex, 3);
 
 		static float accuracy = -1.0f;
 
@@ -365,17 +385,36 @@ int main(int /* argc */, char** argv)
 
 		if (ImGui::Button("Compare exact and quadtree gradient computers"))
 		{
-			tsne.compareGradientComputers(quadtreeGradientComputer, exactGradientComputer, debugRenderData);
+			debugRenderData.clear();
+			lastGradientComparisonName = "Exact vs Quadtree";
+			lastGradientComparisonResult = tsne.compareGradientComputers(quadtreeGradientComputer, exactGradientComputer, debugRenderData);
+			hasGradientComparisonResult = true;
 		}
 
         if (ImGui::Button("Compare exact and fitsne gradient computers"))
         {
-			tsne.compareGradientComputers(exactGradientComputer, fItSNEGradientComputer, debugRenderData);
+			debugRenderData.clear();
+			lastGradientComparisonName = "Exact vs FItSNE";
+			lastGradientComparisonResult = tsne.compareGradientComputers(exactGradientComputer, fItSNEGradientComputer, debugRenderData);
+			hasGradientComparisonResult = true;
         }
 
         if (ImGui::Button("Compare quadtree and fitsne gradient computers"))
         {
-			tsne.compareGradientComputers(quadtreeGradientComputer, fItSNEGradientComputer, debugRenderData);
+			debugRenderData.clear();
+			lastGradientComparisonName = "Quadtree vs FItSNE";
+			lastGradientComparisonResult = tsne.compareGradientComputers(quadtreeGradientComputer, fItSNEGradientComputer, debugRenderData);
+			hasGradientComparisonResult = true;
+        }
+
+        if (hasGradientComparisonResult)
+        {
+            ImGui::Spacing();
+            ImGui::Text("Gradient comparison result");
+            ImGui::Text("Pair: %s", lastGradientComparisonName.c_str());
+            ImGui::Text("Mean diff magnitude: %.6f", static_cast<float>(lastGradientComparisonResult.meanDiffMagnitude));
+            ImGui::Text("Reference gradient magnitude: %.6f", static_cast<float>(lastGradientComparisonResult.meanReferenceGradientMagnitude));
+            ImGui::Text("Relative error: %.2f%%", static_cast<float>(lastGradientComparisonResult.relativeError * 100.0));
         }
 
 		ImGui::Checkbox("Run t-SNE", &runningTSNE);
@@ -393,8 +432,11 @@ int main(int /* argc */, char** argv)
         ImGui::Checkbox("Follow data", &settings.followData);
 		tooltip("Automatically follow the data when it moves");
 
-        ImGui::SliderFloat("Theta", &quadtreeGradientComputer.theta, 0.1f, 3.0f);
-		ImGui::DragInt("Bucket size", &quadtreeGradientComputer.bucketSize, 1.0f, 1, 1000);
+        if (settings.activeGradientComputerIndex == 1)
+        {
+            ImGui::SliderFloat("Theta", &quadtreeGradientComputer.theta, 0.1f, 3.0f);
+            ImGui::DragInt("Bucket size", &quadtreeGradientComputer.bucketSize, 1.0f, 1, 1000);
+        }
 
 		ImGui::Checkbox("Use PCA", &settings.usePCA);
 		tooltip("Use PCA to set a more reasonable initial embedding of the high-dimensional data into 2D");
